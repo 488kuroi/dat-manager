@@ -1,7 +1,13 @@
 import { Injectable } from '@angular/core';
 
 
-const validFootballContent = /^([a-zA-Z]|[0-9])*$/i;
+const validationRules = {
+    football: {
+        regex: /^([a-zA-Z]|[0-9])*$/i,
+        headers: ["Team", "P", "W", "L", "D", "F", "A", "Pts"]
+    }
+};
+
 
 @Injectable()
 export class DatParserService {
@@ -16,7 +22,7 @@ export class DatParserService {
   * ex: success => { code: 200, body: Object }
   *     error   => { code: 500, body: String }
   * */
-  stringParser( string ) {
+  stringParser( string: string ): any {
 
     // build an array of lines nad check that the file is not empty
     let lines =  string.split(/\r?\n/);
@@ -28,12 +34,18 @@ export class DatParserService {
         let row       = item.split( ' ' );
         // push in table array only items with a non empty content
         let parsedRow = row.filter( ( rowItem, rowIndex ) => {
-            if ( rowItem.length > 0 && ( validFootballContent.test( rowItem ) !== false ) ) { return rowItem; }
+            if ( rowItem.length > 0 && ( validationRules.football.regex.test( rowItem ) !== false ) ) { return rowItem; }
         } );
-        table.push( parsedRow );
-
+        if ( parsedRow.length > 0 ) { table.push( parsedRow ); }
     } );
-    console.log( table );
+
+    console.log( table[ 0 ] );
+
+    if ( table[ 0 ].toString() === validationRules.football.headers.toString() ) {
+        return { code: 200, body: table, pageRoute: 'soccer' };
+    } else {
+        return { code: 500, body: 'Invalid columns in file, please read the documentation in order to provide the correct file' };
+    }
 
   }
 
@@ -43,23 +55,30 @@ export class DatParserService {
   * ex: success => { code: 200, body: Object }
   *     error   => { code: 500, body: String }
   * */
-  openFile( event ) {
-      let input         = event.target;
-      console.log( input.files );
-      let fileExtension = input.files[ 0 ].name.split( '.' ).pop();
+  openFile( event: any ): any {
+      return new Promise( ( resolve, reject ) => {
+          let input         = event.target;
+          console.log( input.files );
+          let fileExtension = input.files[ 0 ].name.split( '.' ).pop();
 
-      // check that he file is really in input and that the extesnion is correct
-      if ( input.files.length === 0 ) { return  { code: 500, body: 'No input file provided!' }; }
-      if ( fileExtension !== 'dat' ) { return  { code: 500, body: 'No valid file provided, please load a ".dat" file.' }; }
+          // check that he file is really in input and that the extesnion is correct
+          if ( input.files.length === 0 ) { reject ( { code: 500, body: 'No input file provided!' } ); }
+          if ( fileExtension !== 'dat' ) { reject ( { code: 500, body: 'No valid file provided, please load a ".dat" file.' } ); }
 
-      for ( let index = 0; index < input.files.length; index++) {
-          let reader = new FileReader();
-          reader.onload = () => {
-              let text = reader.result;
-              this.stringParser( text );
-          };
-          reader.readAsText(input.files[index]);
-      }
+          for ( let index = 0; index < input.files.length; index++) {
+              let reader = new FileReader();
+              reader.onload = () => {
+                  let text = reader.result;
+                  let parsedData = this.stringParser( text );
+                  if ( parsedData[ 'code' ] === 200 ) {
+                      resolve( [  parsedData[ 'body' ], parsedData[ 'pageRoute' ] ] );
+                  } else {
+                      reject ( parsedData[ 'body' ] );
+                  }
+              };
+              reader.readAsText(input.files[index]);
+          }
+      } );
   }
 
 
